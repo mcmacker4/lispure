@@ -1,4 +1,4 @@
-use crate::nodes::{Node, NodePtr};
+use crate::nodes::{Node, NodeRef};
 use super::tokens::Token;
 use std::iter::Peekable;
 use std::slice::Iter;
@@ -38,32 +38,32 @@ type ParseResult<T> = std::result::Result<T, ParseError>;
 type TokenIter<'a> = Peekable<Iter<'a, Token>>;
 
 #[inline]
-fn ptr(node: Node) -> NodePtr {
-    Rc::new(Box::new(node))
+fn ptr(node: Node) -> NodeRef {
+    Rc::new(node)
 }
 
-pub fn parse_file(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
+pub fn parse_file(tokens: &mut TokenIter) -> ParseResult<NodeRef> {
     Ok(parse_file_rest(tokens)?)
 }
 
-fn parse_file_rest(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
+fn parse_file_rest(tokens: &mut TokenIter) -> ParseResult<NodeRef> {
     let node = match tokens.peek() {
         Some(_) => {
             let left = parse_expr(tokens)?;
             let right = parse_file_rest(tokens)?;
-            Node::List(left, right)
+            Node::List(left, right, false)
         },
         None => Node::Nil
     };
     Ok(ptr(node))
 }
 
-pub fn parse_expr(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
+pub fn parse_expr(tokens: &mut TokenIter) -> ParseResult<NodeRef> {
 
     if let Some(token) = tokens.next() {
         let node = match token {
             Token(TokenKind::LParen, pos) => {
-                parse_list(tokens, pos)?
+                parse_list(tokens, pos, false)?
             },
             Token(TokenKind::LBrack, pos) => {
                 parse_vector(tokens, pos)?
@@ -74,6 +74,25 @@ pub fn parse_expr(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
             Token(TokenKind::LCurl, _) => {
                 parse_map(tokens)?
             },
+            Token(TokenKind::SingleQuote, _) => {
+                match tokens.next() {
+                    Some(Token(TokenKind::LParen, pos)) => {
+                        parse_list(tokens, pos, true)?
+                    },
+                    Some(Token(kind, pos)) => {
+                        return Err(ParseError::new(
+                            &format!("Expected a list but got {}", kind),
+                            Some(pos.clone())
+                        ))
+                    },
+                    None => {
+                        return Err(ParseError::new(
+                            "Expected a list but got nothing.",
+                            None
+                        ))
+                    }
+                }
+            }
             Token(TokenKind::Ident(ident), _) => {
                 ptr(Node::Ident(ident.clone()))
             },
@@ -106,7 +125,7 @@ pub fn parse_expr(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
 
 }
 
-fn parse_list(tokens: &mut TokenIter, pos: &TokenPos) -> ParseResult<NodePtr> {
+fn parse_list(tokens: &mut TokenIter, pos: &TokenPos, literal: bool) -> ParseResult<NodeRef> {
     let node = match tokens.peek() {
         Some(Token(TokenKind::RParen, _)) => {
             tokens.next().unwrap();
@@ -114,15 +133,15 @@ fn parse_list(tokens: &mut TokenIter, pos: &TokenPos) -> ParseResult<NodePtr> {
         },
         Some(_) => {
             let left = parse_expr(tokens)?;
-            let right = parse_list(tokens, pos)?;
-            Node::List(left, right)
+            let right = parse_list(tokens, pos, false)?;
+            Node::List(left, right, literal)
         },
         None => return Err(ParseError::new("Unexpected End of Token List while parsing List", Some(pos.clone())))
     };
     Ok(ptr(node))
 }
 
-fn parse_vector(tokens: &mut TokenIter, pos: &TokenPos) -> ParseResult<NodePtr> {
+fn parse_vector(tokens: &mut TokenIter, pos: &TokenPos) -> ParseResult<NodeRef> {
     let mut vector = Vec::new();
     loop {
         match tokens.peek() {
@@ -142,10 +161,10 @@ fn parse_vector(tokens: &mut TokenIter, pos: &TokenPos) -> ParseResult<NodePtr> 
     Ok(ptr(Node::Vector(vector)))
 }
 
-fn parse_set(_tokens: &mut TokenIter) -> ParseResult<NodePtr> {
+fn parse_set(_tokens: &mut TokenIter) -> ParseResult<NodeRef> {
     unimplemented!()
 }
 
-fn parse_map(_tokens: &mut TokenIter) -> ParseResult<NodePtr> {
+fn parse_map(_tokens: &mut TokenIter) -> ParseResult<NodeRef> {
     unimplemented!()
 }

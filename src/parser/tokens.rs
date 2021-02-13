@@ -42,7 +42,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::RBrack => write!(f, "']'"),
             TokenKind::LCurl => write!(f, "'{{'"),
             TokenKind::RCurl => write!(f, "'}}'"),
-            TokenKind::SingleQuote => write!(f, "'\"'"),
+            TokenKind::SingleQuote => write!(f, "\"'\""),
             TokenKind::Hash => write!(f, "'#'"),
             TokenKind::Comma => write!(f, "','"),
             TokenKind::Symbol(s) => write!(f, "'{}'", s),
