@@ -13,8 +13,12 @@ fn main() {
     println!("Source:\n\t{}", source.trim());
     println!("Tokens:\n\t{:?}", tokens.iter().map(|token| &token.0).collect::<Vec<&TokenKind>>());
 
-    println!("Nodes:");
-    let node = parse_expr(&mut tokens.iter().peekable()).unwrap();
-    node.print();
+    print!("Nodes:\n\t");
+    let parseResult = parse_expr(&mut tokens.iter().peekable());
+
+    match parseResult {
+        Ok(node) => node.print(),
+        Err(error) => eprintln!("{}", error)
+    }
 
 }
