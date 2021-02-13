@@ -2,6 +2,7 @@ use std::rc::Rc;
 use std::collections::{HashSet, HashMap};
 use std::hash::{Hash, Hasher};
 
+#[derive(Debug)]
 pub enum Node {
     Nil,
     List(NodePtr, NodePtr),
@@ -23,7 +24,7 @@ impl Node {
         match self {
             Node::Nil => print!("Nil"),
             Node::List(_, _) => self.print_list(),
-            Node::Vector(_) => unimplemented!(),
+            Node::Vector(_) => self.print_vec(),
             Node::Set(_) => unimplemented!(),
             Node::Map(_) => unimplemented!(),
             Node::Symbol(symbol) => print!("{}", symbol),
@@ -47,6 +48,21 @@ impl Node {
         }
         print!(")")
     }
+
+    fn print_vec(&self) {
+        if let Node::Vector(vec) = self {
+            print!("[");
+            let mut iter = vec.iter().peekable();
+            while let Some(node) = iter.next() {
+                node.print();
+                if let Some(_) = iter.peek() {
+                    print!(" ");
+                }
+            }
+            print!("]");
+        }
+    }
+
 }
 
 impl PartialEq for Node {

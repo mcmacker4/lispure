@@ -3,16 +3,20 @@ use super::tokens::Token;
 use std::iter::Peekable;
 use std::slice::Iter;
 use std::rc::Rc;
+use crate::parser::tokens::TokenKind;
+use crate::parser::TokenPos;
 
 #[derive(Debug)]
 pub struct ParseError {
-    message: String
+    message: String,
+    pos: Option<TokenPos>
 }
 
 impl ParseError {
-    fn new(message: &str) -> Self {
+    fn new(message: &str, pos: Option<TokenPos>) -> Self {
         Self {
-            message: String::from(message)
+            message: String::from(message),
+            pos
         }
     }
 }
@@ -54,31 +58,31 @@ pub fn parse_expr(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
 
     if let Some(token) = tokens.peek() {
         let node = match token {
-            Token::LParen => parse_list(tokens)?,
-            Token::LBrack => parse_vector(tokens)?,
-            Token::Hash => parse_set(tokens)?,
-            Token::LCurl => parse_map(tokens)?,
-            Token::Ident(ident) => {
+            Token(TokenKind::LParen, _) => parse_list(tokens)?,
+            Token(TokenKind::LBrack, _) => parse_vector(tokens)?,
+            Token(TokenKind::Hash, _) => parse_set(tokens)?,
+            Token(TokenKind::LCurl, _) => parse_map(tokens)?,
+            Token(TokenKind::Ident(ident), _) => {
                 tokens.next().unwrap();
                 ptr(Node::Ident(ident.clone()))
             },
-            Token::Symbol(symbol) => {
+            Token(TokenKind::Symbol(symbol), _) => {
                 tokens.next().unwrap();
                 ptr(Node::Symbol(symbol.clone()))
             },
-            Token::String(str) => {
+            Token(TokenKind::String(str), _) => {
                 tokens.next().unwrap();
                 ptr(Node::String(str.clone()))
             },
-            Token::Char(c) => {
+            Token(TokenKind::Char(c), _) => {
                 tokens.next().unwrap();
                 ptr(Node::Char(*c))
             },
-            Token::Integer(int) => {
+            Token(TokenKind::Integer(int), _) => {
                 tokens.next().unwrap();
                 ptr(Node::Integer(*int))
             },
-            Token::Float(float) => {
+            Token(TokenKind::Float(float), _) => {
                 tokens.next().unwrap();
                 ptr(Node::Float(*float))
             },
@@ -86,7 +90,7 @@ pub fn parse_expr(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
         };
         Ok(node)
     } else {
-        Err(ParseError::new("Unexpected End of Token List"))
+        Err(ParseError::new("Unexpected End of Token List", None))
     }
 
 }
@@ -99,7 +103,7 @@ fn parse_list(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
 
 fn parse_list_rest(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
     let node = match tokens.peek() {
-        Some(Token::RParen) => {
+        Some(Token(TokenKind::RParen, _)) => {
             tokens.next().unwrap();
             Node::Nil
         },
@@ -108,13 +112,30 @@ fn parse_list_rest(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
             let right = parse_list_rest(tokens)?;
             Node::List(left, right)
         },
-        None => return Err(ParseError::new("Unexpected End of Token List while parsing List"))
+        None => return Err(ParseError::new("Unexpected End of Token List while parsing List", None))
     };
     Ok(ptr(node))
 }
 
-fn parse_vector(_tokens: &mut TokenIter) -> ParseResult<NodePtr> {
-    unimplemented!()
+fn parse_vector(tokens: &mut TokenIter) -> ParseResult<NodePtr> {
+    let pos =  &tokens.next().unwrap().1;
+    let mut vector = Vec::new();
+    loop {
+        match tokens.peek() {
+            Some(Token(TokenKind::RBrack, _)) => {
+                tokens.next().unwrap();
+                break;
+            },
+            Some(_) => {
+                let node = parse_expr(tokens)?;
+                vector.push(node);
+            },
+            None => {
+                return Err(ParseError::new("Unexpected End of Token List while parsing Vector", Some(pos.clone())))
+            }
+        }
+    }
+    Ok(ptr(Node::Vector(vector)))
 }
 
 fn parse_set(_tokens: &mut TokenIter) -> ParseResult<NodePtr> {

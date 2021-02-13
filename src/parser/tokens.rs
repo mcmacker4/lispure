@@ -1,6 +1,12 @@
 
+#[derive(Debug, Copy, Clone)]
+pub struct TokenPos {
+    pub line: usize,
+    pub column: usize,
+}
+
 #[derive(Debug)]
-pub enum Token {
+pub enum TokenKind {
     LParen,
     RParen,
     LBrack,
@@ -17,3 +23,6 @@ pub enum Token {
     Integer(i64),
     Float(f64),
 }
+
+#[derive(Debug)]
+pub struct Token(pub TokenKind, pub TokenPos);

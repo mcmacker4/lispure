@@ -1,16 +1,19 @@
 use std::iter::Peekable;
 use std::str::Chars;
-use super::tokens::Token;
+use super::tokens::{Token, TokenPos};
+use crate::parser::tokens::TokenKind;
 
 #[derive(Debug)]
 pub struct TokenizeError {
-    message: String
+    message: String,
+    pos: TokenPos,
 }
 
 impl TokenizeError {
-    pub fn new(message: &str) -> Self {
+    pub fn new(message: &str, pos: TokenPos) -> Self {
         Self {
-            message: String::from(message)
+            message: String::from(message),
+            pos
         }
     }
 }
@@ -25,134 +28,187 @@ impl std::error::Error for TokenizeError {}
 
 pub type TokenizeResult<T> = std::result::Result<T, TokenizeError>;
 
-pub fn tokenize(source: &String) -> TokenizeResult<Vec<Token>> {
+struct Tokenizer<'a> {
+    chars: Peekable<Chars<'a>>,
 
-    let mut chars = source.chars().peekable();
-    skip_spaces(&mut chars);
+    pub line: usize,
+    pub column: usize,
+}
+
+
+impl<'a> Tokenizer<'a> {
+    fn new(chars: Peekable<Chars<'a>>) -> Self {
+        Self {
+            chars,
+            line: 1,
+            column: 1
+        }
+    }
+
+    fn peek(&mut self) -> Option<&char> {
+        self.chars.peek()
+    }
+
+    fn next(&mut self) -> Option<char> {
+        if self.peek().map_or(false, |c| *c == '\n') {
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.column += 1;
+        }
+        self.chars.next()
+    }
+
+    fn pos(&self) -> TokenPos {
+        TokenPos {
+            line: self.line,
+            column: self.column
+        }
+    }
+}
+
+pub fn tokenize(source: &str) -> TokenizeResult<Vec<Token>> {
+
+    let mut tokenizer = Tokenizer::new(source.chars().peekable());
+    skip_spaces(&mut tokenizer);
 
     let mut tokens = Vec::new();
 
-    while let Some(_) = chars.peek() {
-        let token = next_token(&mut chars)?;
+    while let Some(_) = tokenizer.peek() {
+        let token = next_token(&mut tokenizer)?;
         tokens.push(token);
 
-        skip_spaces(&mut chars);
+        skip_spaces(&mut tokenizer);
     }
 
     Ok(tokens)
 
 }
 
-fn skip_spaces(chars: &mut Peekable<Chars>) {
-    while chars.peek().map_or(false, |c| c.is_ascii_whitespace()) {
-        chars.next();
+fn skip_spaces(tokenizer: &mut Tokenizer) {
+    while tokenizer.peek().map_or(false, |c| c.is_ascii_whitespace()) {
+        tokenizer.next();
     }
 }
 
-fn next_token(chars: &mut Peekable<Chars>) -> TokenizeResult<Token> {
-    if let Some(c) = chars.peek() {
+fn next_token(tokenizer: &mut Tokenizer) -> TokenizeResult<Token> {
+    if let Some(c) = tokenizer.peek() {
         match *c {
             'a'..='z' | 'A'..='Z' | ':' => {
-                read_symbol_or_ident(chars)
+                read_symbol_or_ident(tokenizer)
             },
             '0'..='9' => {
-                read_number(chars)
+                read_number(tokenizer)
             },
             '"' => {
-                read_string(chars)
+                read_string(tokenizer)
             },
             '\\' => {
-                read_char(chars)
+                read_char(tokenizer)
             },
-            _ => single_char_token(chars)
+            _ => single_char_token(tokenizer)
         }
     } else {
-        Err(TokenizeError::new("Unexpected End of File."))
+        Err(TokenizeError::new("Unexpected End of File.", tokenizer.pos()))
     }
 }
 
-fn read_symbol_or_ident(chars: &mut Peekable<Chars>) -> TokenizeResult<Token> {
+#[inline]
+fn is_reserved_char(c: char) -> bool {
+    match c {
+        '[' | ']' | '(' | ')' | '{' | '}' | '\'' | '"' => true,
+        _ => false
+    }
+}
+
+fn read_symbol_or_ident(tokenizer: &mut Tokenizer) -> TokenizeResult<Token> {
     let mut value = String::new();
 
-    while let Some(c) = chars.peek() {
-        if c.is_ascii_whitespace() {
+    let pos = tokenizer.pos();
+
+    while let Some(c) = tokenizer.peek() {
+        if c.is_ascii_whitespace() || is_reserved_char(*c) {
             break;
         } else {
-            value.push(chars.next().unwrap());
+            value.push(tokenizer.next().unwrap());
         }
     }
 
     if value.starts_with(':') {
-        Ok(Token::Ident(value))
+        Ok(Token(TokenKind::Ident(value), pos))
     } else {
-        Ok(Token::Symbol(value))
+        Ok(Token(TokenKind::Symbol(value), pos))
     }
 }
 
-fn read_number(chars: &mut Peekable<Chars>) -> TokenizeResult<Token> {
+fn read_number(tokenizer: &mut Tokenizer) -> TokenizeResult<Token> {
     let mut value: i64 = 0;
+    let pos = tokenizer.pos();
 
     // TODO: Different representations
-    while let Some(c) = chars.peek() {
+    while let Some(c) = tokenizer.peek() {
         if c.is_digit(10) {
-            value = value * 10 + i64::from(chars.next().unwrap().to_digit(10).unwrap());
+            value = value * 10 + i64::from(tokenizer.next().unwrap().to_digit(10).unwrap());
         } else {
             break;
         }
     }
 
-    Ok(Token::Integer(value))
+    Ok(Token(TokenKind::Integer(value), pos))
 }
 
-fn read_string(chars: &mut Peekable<Chars>) -> TokenizeResult<Token> {
+fn read_string(tokenizer: &mut Tokenizer) -> TokenizeResult<Token> {
     let mut value = String::new();
+    let pos = tokenizer.pos();
 
-    assert_eq!('"', chars.next().unwrap());
+    assert_eq!('"', tokenizer.next().unwrap());
 
     loop {
-        match chars.peek() {
+        match tokenizer.peek() {
             Some('"') => {
-                chars.next();
+                tokenizer.next();
                 break;
             },
-            Some('\n') => return Err(TokenizeError::new("Unexpected end of line while parsing a string")),
+            Some('\n') => return Err(TokenizeError::new("Unexpected end of line while parsing a string", pos)),
             Some(_) => {
-                value.push(chars.next().unwrap());
+                value.push(tokenizer.next().unwrap());
             },
-            None => return Err(TokenizeError::new("Unexpected End of File while parsing String"))
+            None => return Err(TokenizeError::new("Unexpected End of File while parsing String", pos))
         }
     }
 
-    assert_eq!('"', chars.next().unwrap());
+    assert_eq!('"', tokenizer.next().unwrap());
 
-    Ok(Token::String(value))
+    Ok(Token(TokenKind::String(value), pos))
 }
 
-fn read_char(chars: &mut Peekable<Chars>) -> TokenizeResult<Token> {
-    assert_eq!('\\', chars.next().unwrap());
-    if let Some(c) = chars.next() {
-        Ok(Token::Char(c))
+fn read_char(tokenizer: &mut Tokenizer) -> TokenizeResult<Token> {
+    assert_eq!('\\', tokenizer.next().unwrap());
+    let pos = tokenizer.pos();
+    if let Some(c) = tokenizer.next() {
+        Ok(Token(TokenKind::Char(c), pos))
     } else {
-        Err(TokenizeError::new("Unexpected End of File while parsing Char"))
+        Err(TokenizeError::new("Unexpected End of File while parsing Char", pos))
     }
 }
 
-fn single_char_token(chars: &mut Peekable<Chars>) -> TokenizeResult<Token> {
-    let token = match chars.peek() {
-        Some('(') => Ok(Token::LParen),
-        Some(')') => Ok(Token::RParen),
-        Some('[') => Ok(Token::LBrack),
-        Some(']') => Ok(Token::RBrack),
-        Some('{') => Ok(Token::LCurl),
-        Some('}') => Ok(Token::RCurl),
-        Some('#') => Ok(Token::Hash),
-        Some(',') => Ok(Token::Comma),
-        Some('\'') => Ok(Token::SingleQuote),
-        Some(c) => Err(TokenizeError::new(&format!("Unexpected Character: {}", c))),
-        _ => Err(TokenizeError::new("Unexpected End of File"))
+fn single_char_token(tokenizer: &mut Tokenizer) -> TokenizeResult<Token> {
+    let pos = tokenizer.pos();
+    let token = match tokenizer.peek() {
+        Some('(') => Ok(Token(TokenKind::LParen, pos)),
+        Some(')') => Ok(Token(TokenKind::RParen, pos)),
+        Some('[') => Ok(Token(TokenKind::LBrack, pos)),
+        Some(']') => Ok(Token(TokenKind::RBrack, pos)),
+        Some('{') => Ok(Token(TokenKind::LCurl, pos)),
+        Some('}') => Ok(Token(TokenKind::RCurl, pos)),
+        Some('#') => Ok(Token(TokenKind::Hash, pos)),
+        Some(',') => Ok(Token(TokenKind::Comma, pos)),
+        Some('\'') => Ok(Token(TokenKind::SingleQuote, pos)),
+        Some(c) => Err(TokenizeError::new(&format!("Unexpected Character: {}", c), pos)),
+        _ => Err(TokenizeError::new("Unexpected End of File", pos))
     };
     if token.is_ok() {
-        chars.next();
+        tokenizer.next();
     }
     token
 }
