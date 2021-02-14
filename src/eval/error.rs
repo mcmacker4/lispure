@@ -4,7 +4,7 @@ pub struct EvalError {
 }
 
 impl EvalError {
-    fn new(message: &str) -> Self {
+    pub fn new(message: &str) -> Self {
         Self {
             message: String::from(message)
         }

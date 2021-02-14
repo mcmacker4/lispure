@@ -1,5 +1,5 @@
 [package]
-name = "clojure-chistoso"
+name = "lispure"
 version = "0.1.0"
 authors = ["Hans Geel <mcmacker4@gmail.com>"]
 edition = "2018"
