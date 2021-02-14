@@ -5,10 +5,10 @@ use std::hash::{Hash, Hasher};
 #[derive(Debug)]
 pub enum Node {
     Nil,
-    List(NodeRef, NodeRef, bool),
-    Vector(Vec<NodeRef>),
-    Set(HashSet<NodeRef>),
-    Map(HashMap<NodeRef, NodeRef>),
+    List(NodePtr, NodePtr, bool),
+    Vector(Vec<NodePtr>),
+    Set(HashSet<NodePtr>),
+    Map(HashMap<NodePtr, NodePtr>),
     Symbol(String),
     Ident(String),
     String(String),
@@ -17,7 +17,7 @@ pub enum Node {
     Float(f64)
 }
 
-pub type NodeRef = Rc<Node>;
+pub type NodePtr = Rc<Node>;
 
 impl Node {
     pub fn print(&self) {
@@ -37,9 +37,6 @@ impl Node {
     }
 
     fn print_list(&self) {
-        if let Node::List(_, _, true) = self {
-            print!("'");
-        }
         print!("(");
         let mut node = self;
         while let Node::List(left, right, _) = node {

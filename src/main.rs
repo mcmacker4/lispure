@@ -1,10 +1,13 @@
 mod parser;
 mod nodes;
+mod context;
 mod eval;
 
 use parser::tokenize;
-use crate::parser::parse_file;
+use crate::parser::{parse_file, TokenKind};
 use std::io::Write;
+use crate::eval::eval_file;
+use crate::context::EvalContext;
 
 
 fn main() {
@@ -12,6 +15,8 @@ fn main() {
 }
 
 fn repl() -> std::io::Result<()> {
+
+    let mut context = EvalContext::new();
 
     loop {
 
@@ -42,7 +47,7 @@ fn repl() -> std::io::Result<()> {
             }
         };
 
-        let result = eval::eval_file(&expr);
+        let result = eval::eval_file(&mut context, &expr);
         match result {
             Ok(result) => {
                 result.print();
@@ -59,8 +64,7 @@ fn repl() -> std::io::Result<()> {
 
 }
 
-#[test]
-fn parse_test() {
+fn _run_file() {
 
     let source = std::fs::read_to_string("./test.clj").expect("Could not open file");
     let tokens = tokenize(&source).unwrap();
@@ -69,11 +73,13 @@ fn parse_test() {
     println!("Tokens:\n\t{:?}", tokens.iter().map(|token| &token.0).collect::<Vec<&TokenKind>>());
 
     print!("Nodes:\n\t");
-    let parse_result = parse_expr(&mut tokens.iter().peekable());
+    let parse_result = parse_file(&mut tokens.iter().peekable());
 
-    match parse_result {
+    let mut context = EvalContext::new();
+
+    match &parse_result {
         Ok(node) => {
-            let result = run_code(node);
+            let result = eval_file(&mut context, node).unwrap();
             result.print()
         },
         Err(error) => eprintln!("{}", error)
