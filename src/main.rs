@@ -16,7 +16,7 @@ fn main() {
 
 fn repl() -> std::io::Result<()> {
 
-    let mut context = EvalContext::new();
+    let mut context = EvalContext::new_main();
 
     loop {
 
@@ -50,10 +50,9 @@ fn repl() -> std::io::Result<()> {
         let result = eval::eval_file(&mut context, &expr);
         match result {
             Ok(result) => {
-                result.print();
-                println!();
+                println!("{}", result);
             },
-            Err(err) => println!("Error: {}", err)
+            Err(err) => println!("{}", err)
         }
 
         std::io::stdout().flush()?;
@@ -75,12 +74,12 @@ fn _run_file() {
     print!("Nodes:\n\t");
     let parse_result = parse_file(&mut tokens.iter().peekable());
 
-    let mut context = EvalContext::new();
+    let mut context = EvalContext::new_main();
 
     match &parse_result {
         Ok(node) => {
             let result = eval_file(&mut context, node).unwrap();
-            result.print()
+            println!("{}", result)
         },
         Err(error) => eprintln!("{}", error)
     }

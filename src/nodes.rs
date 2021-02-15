@@ -1,6 +1,7 @@
 use std::rc::Rc;
 use std::collections::{HashSet, HashMap};
 use std::hash::{Hash, Hasher};
+use std::iter::IntoIterator;
 
 #[derive(Debug)]
 pub enum Node {
@@ -20,46 +21,101 @@ pub enum Node {
 pub type NodePtr = Rc<Node>;
 
 impl Node {
-    pub fn print(&self) {
+
+    pub fn is_list(&self) -> bool {
         match self {
-            Node::Nil => print!("Nil"),
-            Node::List(_, _, _) => self.print_list(),
-            Node::Vector(_) => self.print_vec(),
+            Self::List(_, _, _) => true,
+            _ => false
+        }
+    }
+
+    pub fn len(&self) -> Option<usize> {
+        match self {
+            Self::List(_, right, _) => {
+                if let Self::Nil = right.as_ref() {
+                    Some(1)
+                } else{
+                    Some(1 + right.len().expect("List's right node is neither list or nil"))
+                }
+            },
+            Self::Vector(vec) => Some(vec.len()),
+            Self::Set(set) => Some(set.len()),
+            _ => None
+        }
+    }
+
+}
+
+pub trait IntoListIter {
+    fn list_iter(&self) -> NodeIter;
+}
+
+impl IntoListIter for NodePtr {
+
+    fn list_iter(&self) -> NodeIter {
+        NodeIter {
+            node: self.clone()
+        }
+    }
+
+}
+
+pub struct NodeIter {
+    node: NodePtr
+}
+
+impl Iterator for NodeIter {
+    type Item = NodePtr;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.node.clone().as_ref() {
+            Node::List(left, right, _) => {
+                self.node = right.clone();
+                Some(left.clone())
+            },
+            Node::Nil => None,
+            _ => panic!("Iterating over non-list node.")
+        }
+    }
+}
+
+
+impl std::fmt::Display for Node {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Node::Nil => write!(f, "Nil"),
+            Node::List(_, _, _) => {
+                write!(f, "(")?;
+                let mut node = self;
+                while let Node::List(left, right, _) = node {
+                    write!(f, "{}", left)?;
+                    if let Node::List(_, _, _) = **right {
+                        write!(f, " ")?;
+                    }
+                    node = right;
+                }
+                write!(f, ")")
+            },
+            Node::Vector(vec) => {
+                write!(f, "[")?;
+                let mut iter = vec.iter().peekable();
+                while let Some(node) = iter.next() {
+                    write!(f, "{}", node)?;
+                    if let Some(_) = iter.peek() {
+                        write!(f, " ")?;
+                    }
+                }
+                write!(f, "]")
+            },
             Node::Set(_) => unimplemented!(),
             Node::Map(_) => unimplemented!(),
-            Node::Symbol(symbol) => print!("{}", symbol),
-            Node::Ident(ident) => print!("{}", ident),
-            Node::String(string) => print!("\"{}\"", string),
-            Node::Char(char) => print!("\\{}", char),
-            Node::Integer(int) => print!("{}", int),
-            Node::Float(float) => print!("{}", float)
-        }
-    }
-
-    fn print_list(&self) {
-        print!("(");
-        let mut node = self;
-        while let Node::List(left, right, _) = node {
-            left.print();
-            if let Node::List(_, _, _) = **right {
-                print!(" ");
-            }
-            node = right;
-        }
-        print!(")")
-    }
-
-    fn print_vec(&self) {
-        if let Node::Vector(vec) = self {
-            print!("[");
-            let mut iter = vec.iter().peekable();
-            while let Some(node) = iter.next() {
-                node.print();
-                if let Some(_) = iter.peek() {
-                    print!(" ");
-                }
-            }
-            print!("]");
+            Node::Symbol(symbol) => write!(f, "{}", symbol),
+            Node::Ident(ident) => write!(f, "{}", ident),
+            Node::String(string) => write!(f, "\"{}\"", string),
+            Node::Char(char) => write!(f, "\\{}", char),
+            Node::Integer(int) => write!(f, "{}", int),
+            Node::Float(float) => write!(f, "{}", float)
         }
     }
 

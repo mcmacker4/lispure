@@ -30,6 +30,16 @@ fn eval_expr(context: &mut EvalContext, node: &NodePtr) -> EvalResult {
     }
 }
 
-fn call(_context: &mut EvalContext, _left: &NodePtr, right: &NodePtr) -> EvalResult {
-    Ok(right.clone())
+fn call(context: &mut EvalContext, _left: &NodePtr, right: &NodePtr) -> EvalResult {
+    match _left.as_ref() {
+        Node::List(_, _, _) => unimplemented!(),
+        Node::Symbol(symbol) => {
+            if let Some(function) = context.root().get_builtin(symbol) {
+                function(context, right)
+            } else {
+                Err(EvalError::new(&format!("Function '{}' not found", symbol)))
+            }
+        },
+        node => Err(EvalError::new(&format!("Node {:?} is not a function", node)))
+    }
 }

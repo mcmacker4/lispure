@@ -177,8 +177,6 @@ fn read_string(tokenizer: &mut Tokenizer) -> TokenizeResult<Token> {
         }
     }
 
-    assert_eq!('"', tokenizer.next().unwrap());
-
     Ok(Token(TokenKind::String(value), pos))
 }
 
